@@ -4,6 +4,8 @@ import sympy
 from sympy.printing.latex import latex
 import drawsvg as draw
 import latextools
+import cmath
+import json
 
 VERBOSE = False
 
@@ -107,6 +109,7 @@ class Diagram:
             init_state = {'0'*n_qubits: 1}
         self.state_sequence = [init_state]
         self.draw_states()
+        self.json = {"type": "feynmanpath", "cols": []}
 
     def draw(self):
         w = (len(self.state_sequence)-1) * self.w_time + self.w_label - self.font*0.5
@@ -120,6 +123,9 @@ class Diagram:
         return self.draw()._repr_html_()
     def _repr_svg_(self):
         return self.draw()._repr_svg_()
+
+    def print_json(self):
+        print(self.json)
 
     def state_xy(self, key, time):
         state_idx = self.possible_states.index(key)
@@ -138,7 +144,7 @@ class Diagram:
         x, y = self.state_xy(key, time)
         g.draw(render_label(sympy.sympify(amp), key),
                x=x+self.w_label/2-self.font*0.2, y=y, scale=self.font/12, center=True, text_anchor='end')
-        if abs(float(amp)) < 1e-8:
+        if abs(amp) < 1e-8: #magnitude of complex number
             # Draw red X over it
             ys = self.font/2*1.4
             xs = self.w_label/2*0.7
@@ -167,6 +173,8 @@ class Diagram:
 
     def gate_arrow(self, g, time1, key1, key2, amp=1):
         w = float(abs(amp))
+        r = abs(amp) #magnitude
+        p = cmath.phase(amp)
         x1, y1 = self.state_xy(key1, time1)
         x2, y2 = self.state_xy(key2, time1+1)
         x1 += self.arrow_off
@@ -176,7 +184,7 @@ class Diagram:
         yy1 = y1 + (y2-y1)*(xx1-x1)/(x2-x1)
         yy2 = y2 - (y2-y1)*(x2-xx2)/(x2-x1)
         color = '#26f'
-        if abs(float(amp) - abs(float(amp))) >= 1e-8:
+        if p >= 1e-8:
             color = '#e70'
         self.straight_arrow(g, color, xx1, yy1, xx2, yy2, width=w)
 
@@ -191,12 +199,19 @@ class Diagram:
         clean_state = {
             key: amp
             for key, amp in new_state.items()
-            if abs(float(amp)) >= 1e-8
+            if abs(amp) >= 1e-8
         }
         self.state_sequence[-1] = clean_state
 
+    def perform_noop(self):
+        new_json_elem = {}
+        for key, amp in self.state_sequence[-1].items():
+            new_json_elem[key] = {"amp": amp, "next": {}}
+        self.json["cols"].append(new_json_elem)
+
     def perform_h(self, q_i, *, pre_latex=f'', name='H'):
         new_state = {}
+        new_json_elem = {}
         t = len(self.state_sequence)-1
         for key, amp in self.state_sequence[-1].items():
             is_one = key[q_i] == '1'
@@ -213,11 +228,37 @@ class Diagram:
             if one not in new_state: new_state[one] = 0
             new_state[zero] += amp*zero_amp
             new_state[one] += amp*one_amp
+            next_state = {zero: amp*zero_amp, one: amp*one_amp}
+            new_json_elem[key] = {"amp": amp, "next": next_state}
+        self.json["cols"].append(new_json_elem)
         self.transition_text(self.d, t, f'{pre_latex}{name}_{q_i}')
+        self.add_states(new_state)
+        #print(self.json)
+
+    def perform_conot(self, qi1, qi2, *, pre_latex=f'', name='CONOT'):
+        #0-controlled Not gate
+        new_state = {}
+        new_json_elem = {}
+        t = len(self.state_sequence)-1
+        for key, amp in self.state_sequence[-1].items():
+            is_zero = key[qi1] == '0'
+            is_targ_one = key[qi2] == '1'
+            digits = list(key)
+            if is_zero:
+                digits[qi2] = '01'[not is_targ_one]
+            new_key = ''.join(digits)
+            self.gate_arrow(self.d, t, key, new_key, amp=1)
+            if new_key not in new_state: new_state[new_key] = 0
+            new_state[new_key] += amp
+            next_state = {new_key: amp}
+            new_json_elem[key] = {"amp": amp, "next": next_state}
+        self.json["cols"].append(new_json_elem)
+        self.transition_text(self.d, t, f'{pre_latex}{name}_{{{qi1}{qi2}}}')
         self.add_states(new_state)
 
     def perform_cnot(self, qi1, qi2, *, pre_latex=f'', name='CNOT'):
         new_state = {}
+        new_json_elem = {}
         t = len(self.state_sequence)-1
         for key, amp in self.state_sequence[-1].items():
             is_one = key[qi1] == '1'
@@ -229,11 +270,15 @@ class Diagram:
             self.gate_arrow(self.d, t, key, new_key, amp=1)
             if new_key not in new_state: new_state[new_key] = 0
             new_state[new_key] += amp
+            next_state = {new_key: amp}
+            new_json_elem[key] = {"amp": amp, "next": next_state}
+        self.json["cols"].append(new_json_elem)
         self.transition_text(self.d, t, f'{pre_latex}{name}_{{{qi1}{qi2}}}')
         self.add_states(new_state)
 
     def perform_z(self, q_i, *, pre_latex=f'', name='Z'):
         new_state = {}
+        new_json_elem = {}
         t = len(self.state_sequence)-1
         for key, amp in self.state_sequence[-1].items():
             is_one = key[q_i] == '1'
@@ -241,11 +286,31 @@ class Diagram:
             self.gate_arrow(self.d, t, key, key, amp=new_amp/amp)
             if key not in new_state: new_state[key] = 0
             new_state[key] += new_amp
+            next_state = {key: new_amp}
+            new_json_elem[key] = {"amp": amp, "next": next_state}
+        self.json["cols"].append(new_json_elem)
+        self.transition_text(self.d, t, f'{pre_latex}{name}_{{{q_i}}}')
+        self.add_states(new_state)
+
+    def perform_s(self, q_i, *, pre_latex=f'', name='S'):
+        new_state = {}
+        t = len(self.state_sequence)-1
+        new_json_elem = {}
+        for key, amp in self.state_sequence[-1].items():
+            is_one = key[q_i] == '1'
+            new_amp = 1j*amp if is_one else amp
+            self.gate_arrow(self.d, t, key, key, amp=new_amp/amp)
+            if key not in new_state: new_state[key] = 0
+            new_state[key] += new_amp
+            next_state = {key: new_amp}
+            new_json_elem[key] = {"amp": amp, "next": next_state}
+        self.json["cols"].append(new_json_elem)
         self.transition_text(self.d, t, f'{pre_latex}{name}_{{{q_i}}}')
         self.add_states(new_state)
 
     def perform_x(self, q_i, *, pre_latex=f'', name='X'):
         new_state = {}
+        new_json_elem = {}
         t = len(self.state_sequence)-1
         for key, amp in self.state_sequence[-1].items():
             is_one = key[q_i] == '1'
@@ -256,5 +321,8 @@ class Diagram:
             if new_key not in new_state:
                 new_state[new_key] = 0
             new_state[new_key] += amp
+            next_state = {new_key: amp}
+            new_json_elem[key] = {"amp": amp, "next": next_state}
+        self.json["cols"].append(new_json_elem)
         self.transition_text(self.d, t, f'{pre_latex}{name}_{{{q_i}}}')
         self.add_states(new_state)

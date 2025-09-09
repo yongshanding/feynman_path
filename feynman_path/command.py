@@ -21,7 +21,8 @@ def draw_diagram(n_qubits, gates):
     for gate in gates:
         name, args = parse_gate(gate)
         getattr(f, f'perform_{name}')(*args)
-
+    f.perform_noop()
+    f.print_json()
     return f
 
 def draw_circuit_pdf(n_qubits, gates):
