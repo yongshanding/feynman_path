@@ -18,10 +18,10 @@ setup(
     packages = find_packages(),
     entry_points = {
         'console_scripts': [
-            'feynman_path=feynman_path.command:run_from_command_line',
+            'feynman_path=feynman_path.cli:main',
         ]},
     version = version,
-    description = 'Visualization tool for the Feynman Path Sum applied to quantum circuits',
+    description = 'Feynman Path computation for quantum circuits with JSON output',
     long_description = long_desc,
     long_description_content_type = 'text/markdown',
     author = 'Casey Duckering',
@@ -37,9 +37,8 @@ setup(
         'Framework :: Jupyter',
     ],
     install_requires = [
-        'drawSvg~=2.0',
-        'latextools~=0.5',
-        'sympy~=1.7',
+        'numpy>=1.20',
+        'sympy>=1.7',
     ],
 )
 
