@@ -1,4 +1,6 @@
-from .command import run_from_command_line
+"""Entry point for feynman_path command-line tool."""
+
+from .cli import main
 
 if __name__ == '__main__':
-    run_from_command_line()
+    main()
