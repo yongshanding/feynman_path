@@ -18,14 +18,22 @@ Examples:
   # Save to file
   feynman_path 2 h0 cnot0,1 --output result.json
 
-  # 3-qubit circuit with various gates
-  feynman_path 3 h0 cnot0,1 cnot1,2 h2
+  # Rotation gates with angles
+  feynman_path 2 rx0,pi/4 ry1,1.5708 cnot0,1
+
+  # Toffoli and multi-controlled gates
+  feynman_path 4 h0 h1 h2 m3cnot0,1,2,3
 
 Gate specifications:
-  Single-qubit gates: h0, x1, z2, s0 (gate name + qubit index)
-  Two-qubit gates: cnot0,1, conot1,2 (gate name + control,target)
+  Single-qubit gates: h0, x1, y2, z0, s1, sdag0, t1, tdag2
+  Rotation gates: rx0,pi/4, ry1,1.5708, rz2,pi/2 (qubit,angle)
+  Two-qubit gates: cnot0,1, conot1,2 (control,target)
+  Multi-qubit gates: toffoli0,1,2, m3cnot0,1,2,3 (controls...,target)
 
-Available gates: H, X, Z, S, CNOT, CONOT
+Available gates:
+  - Basic: H, X, Y, Z, S, Sdag, T, Tdag
+  - Rotations: Rx, Ry, Rz (angles: numeric, pi, or expressions like pi/4)
+  - Controlled: CNOT, CONOT, Toffoli, M[k]CNOT (k=1 to 15)
         """
     )
 

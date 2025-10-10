@@ -326,3 +326,76 @@ class Diagram:
         self.json["cols"].append(new_json_elem)
         self.transition_text(self.d, t, f'{pre_latex}{name}_{{{q_i}}}')
         self.add_states(new_state)
+
+    def perform_y(self, q_i, *, pre_latex=f'', name='Y'):
+        new_state = {}
+        new_json_elem = {}
+        t = len(self.state_sequence)-1
+        for key, amp in self.state_sequence[-1].items():
+            is_one = key[q_i] == '1'
+            digits = list(key)
+            digits[q_i] = '01'[not is_one]
+            new_key = ''.join(digits)
+            # Y|0⟩ = i|1⟩, Y|1⟩ = -i|0⟩
+            new_amp = -1j*amp if is_one else 1j*amp
+            self.gate_arrow(self.d, t, key, new_key, amp=new_amp/amp)
+            if new_key not in new_state:
+                new_state[new_key] = 0
+            new_state[new_key] += new_amp
+            next_state = {new_key: new_amp}
+            new_json_elem[key] = {"amp": amp, "next": next_state}
+        self.json["cols"].append(new_json_elem)
+        self.transition_text(self.d, t, f'{pre_latex}{name}_{{{q_i}}}')
+        self.add_states(new_state)
+
+    def perform_sdag(self, q_i, *, pre_latex=f'', name='S^\\dagger'):
+        new_state = {}
+        t = len(self.state_sequence)-1
+        new_json_elem = {}
+        for key, amp in self.state_sequence[-1].items():
+            is_one = key[q_i] == '1'
+            new_amp = -1j*amp if is_one else amp
+            self.gate_arrow(self.d, t, key, key, amp=new_amp/amp)
+            if key not in new_state: new_state[key] = 0
+            new_state[key] += new_amp
+            next_state = {key: new_amp}
+            new_json_elem[key] = {"amp": amp, "next": next_state}
+        self.json["cols"].append(new_json_elem)
+        self.transition_text(self.d, t, f'{pre_latex}{name}_{{{q_i}}}')
+        self.add_states(new_state)
+
+    def perform_t(self, q_i, *, pre_latex=f'', name='T'):
+        import cmath
+        new_state = {}
+        t = len(self.state_sequence)-1
+        new_json_elem = {}
+        phase = cmath.exp(1j * cmath.pi / 4)
+        for key, amp in self.state_sequence[-1].items():
+            is_one = key[q_i] == '1'
+            new_amp = phase*amp if is_one else amp
+            self.gate_arrow(self.d, t, key, key, amp=new_amp/amp)
+            if key not in new_state: new_state[key] = 0
+            new_state[key] += new_amp
+            next_state = {key: new_amp}
+            new_json_elem[key] = {"amp": amp, "next": next_state}
+        self.json["cols"].append(new_json_elem)
+        self.transition_text(self.d, t, f'{pre_latex}{name}_{{{q_i}}}')
+        self.add_states(new_state)
+
+    def perform_tdag(self, q_i, *, pre_latex=f'', name='T^\\dagger'):
+        import cmath
+        new_state = {}
+        t = len(self.state_sequence)-1
+        new_json_elem = {}
+        phase = cmath.exp(-1j * cmath.pi / 4)
+        for key, amp in self.state_sequence[-1].items():
+            is_one = key[q_i] == '1'
+            new_amp = phase*amp if is_one else amp
+            self.gate_arrow(self.d, t, key, key, amp=new_amp/amp)
+            if key not in new_state: new_state[key] = 0
+            new_state[key] += new_amp
+            next_state = {key: new_amp}
+            new_json_elem[key] = {"amp": amp, "next": next_state}
+        self.json["cols"].append(new_json_elem)
+        self.transition_text(self.d, t, f'{pre_latex}{name}_{{{q_i}}}')
+        self.add_states(new_state)

@@ -11,7 +11,7 @@ This tool computes the Feynman path representation of quantum circuits and outpu
 - **Generic Gate System**: Supports arbitrary unitary matrices, not limited to predefined gates
 - **Symbolic Computation**: Uses sympy for exact symbolic amplitude representations
 - **JSON Output**: Structured data format suitable for further processing or custom visualization
-- **Production-Ready**: Clean architecture with comprehensive test coverage (59+ tests)
+- **Production-Ready**: Clean architecture with comprehensive test coverage (181 tests)
 
 # Install
 
@@ -62,15 +62,33 @@ feynman_path 3 h0 cnot0,1 cnot1,2 h2
 
 ### Gate Specifications
 
-Single-qubit gates: `h0`, `x1`, `z2`, `s0` (gate name + qubit index)
+**Single-qubit gates:** `h0`, `x1`, `z2`, `s0` (gate name + qubit index)
 - `h`: Hadamard gate
 - `x`: Pauli-X (NOT) gate
+- `y`: Pauli-Y gate
 - `z`: Pauli-Z gate
-- `s`: S gate (phase gate)
+- `s`: S gate (phase gate, π/2 rotation)
+- `sdag`: S† gate (adjoint of S, -π/2 rotation)
+- `t`: T gate (π/8 rotation)
+- `tdag`: T† gate (adjoint of T, -π/8 rotation)
 
-Two-qubit gates: `cnot0,1`, `conot1,2` (gate name + control,target)
-- `cnot`: Controlled-NOT gate
-- `conot`: Controlled-NOT with phase flip
+**Parametrized rotation gates:** `rx0,pi/4`, `ry1,1.5708`, `rz2,pi/2` (gate + qubit,angle)
+- `rx`: X-axis rotation gate, Rx(θ) = cos(θ/2)I - i·sin(θ/2)X
+- `ry`: Y-axis rotation gate, Ry(θ) = cos(θ/2)I - i·sin(θ/2)Y
+- `rz`: Z-axis rotation gate, Rz(θ) = cos(θ/2)I - i·sin(θ/2)Z
+- Angles can be: numeric (`1.5708`), symbolic (`pi`), or expressions (`pi/4`, `2*pi/3`)
+
+**Two-qubit gates:** `cnot0,1`, `conot1,2` (gate name + control,target)
+- `cnot`: Controlled-NOT gate (flip target if control=1)
+- `conot`: 0-controlled NOT gate (flip target if control=0)
+
+**Multi-qubit gates:** `toffoli0,1,2`, `m3cnot0,1,2,3` (gate + qubit indices)
+- `toffoli`: Toffoli/CCX gate (control0, control1, target)
+- `m[k]cnot`: k-controlled NOT gate, k=1 to 15
+  - `m1cnot0,1`: 1 control (equivalent to CNOT)
+  - `m2cnot0,1,2`: 2 controls (equivalent to Toffoli)
+  - `m3cnot0,1,2,3`: 3 controls on qubits 0,1,2, target on qubit 3
+  - Supports non-consecutive qubits: `m3cnot0,3,4,1`
 
 ### Command Line Options
 ```
@@ -208,6 +226,33 @@ feynman_path 3 h0 cnot0,1 z1 cnot1,2 h0 h1 cnot1,0 h1 --output three_qubit.json
 ```
 
 The sparse representation efficiently handles larger qubit systems by only tracking non-zero amplitude states.
+
+### Rotation Gates
+
+Apply parametrized rotation gates with symbolic or numeric angles:
+
+```bash
+# Rx rotation by π/4 on qubit 0
+feynman_path 2 rx0,pi/4 cnot0,1
+
+# Multiple rotations with different angles
+feynman_path 3 ry0,pi/2 rx1,1.5708 rz2,2*pi/3
+```
+
+### Multi-Controlled Gates
+
+Use Toffoli or general multi-controlled NOT gates:
+
+```bash
+# Toffoli gate (2 controls)
+feynman_path 3 h0 h1 toffoli0,1,2
+
+# 3-controlled NOT gate
+feynman_path 4 h0 h1 h2 m3cnot0,1,2,3
+
+# Non-consecutive qubits
+feynman_path 5 m3cnot0,3,4,1
+```
 
 ## Qubit Ordering Convention
 
