@@ -15,10 +15,10 @@ This tool computes the Feynman path representation of quantum circuits and outpu
 
 # Install
 
-feynman\_path is available on PyPI:
+feynman\_path is available as local package:
 
 ```bash
-python3 -m pip install feynman_path
+python3 -m pip install .
 ```
 
 ## Dependencies
