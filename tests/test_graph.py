@@ -73,6 +73,8 @@ class TestFeynmanGraphJSONStructure:
         assert json_data['type'] == 'feynmanpath'
         assert 'cols' in json_data
         assert isinstance(json_data['cols'], list)
+        # Should have 2 columns: one for gate, one final layer
+        assert len(json_data['cols']) == 2
 
     def test_json_cols_structure(self):
         """Test that each col has correct structure."""
@@ -86,8 +88,8 @@ class TestFeynmanGraphJSONStructure:
         json_data = graph.to_json()
         cols = json_data['cols']
 
-        # Should have at least one column
-        assert len(cols) > 0
+        # Should have 2 columns (gate + final layer)
+        assert len(cols) == 2
 
         # Each column is a dict with state keys
         for col in cols:
@@ -97,6 +99,11 @@ class TestFeynmanGraphJSONStructure:
                 assert 'amp' in state_data
                 assert 'next' in state_data
                 assert isinstance(state_data['next'], dict)
+
+        # Final column should have empty 'next' for all states
+        final_col = cols[-1]
+        for state_data in final_col.values():
+            assert state_data['next'] == {}
 
     def test_hadamard_json_output(self):
         """Test JSON output for single Hadamard gate."""
@@ -109,17 +116,24 @@ class TestFeynmanGraphJSONStructure:
 
         json_data = graph.to_json()
 
-        # Should have one column (one gate)
-        assert len(json_data['cols']) == 1
+        # Should have 2 columns (one gate + final layer)
+        assert len(json_data['cols']) == 2
 
         col0 = json_data['cols'][0]
         # Initial state |0⟩
         assert '0' in col0
         assert col0['0']['amp'] == 1
 
-        # Transitions to |0⟩ and |1⟩
+        # Transitions to |0⟩ and |1⟩ with cumulative amplitudes
         assert '0' in col0['0']['next']
         assert '1' in col0['0']['next']
+
+        # Final layer should have both output states with empty next
+        final_col = json_data['cols'][1]
+        assert '0' in final_col
+        assert '1' in final_col
+        assert final_col['0']['next'] == {}
+        assert final_col['1']['next'] == {}
 
     def test_two_qubit_hadamard_json(self):
         """Test JSON for H gate on 2-qubit system."""
@@ -131,6 +145,10 @@ class TestFeynmanGraphJSONStructure:
         graph.apply_gate(h0)
 
         json_data = graph.to_json()
+
+        # Should have 2 columns (gate + final layer)
+        assert len(json_data['cols']) == 2
+
         col0 = json_data['cols'][0]
 
         # Initial state |00⟩
@@ -141,6 +159,13 @@ class TestFeynmanGraphJSONStructure:
         next_states = col0['00']['next']
         assert '00' in next_states
         assert '10' in next_states  # q0 flips
+
+        # Final layer check
+        final_col = json_data['cols'][1]
+        assert '00' in final_col
+        assert '10' in final_col
+        assert final_col['00']['next'] == {}
+        assert final_col['10']['next'] == {}
 
 
 class TestFeynmanGraphAmplitudes:
@@ -211,11 +236,16 @@ class TestComplexCircuits:
 
         json_data = graph.to_json()
 
-        # Should have 2 columns
-        assert len(json_data['cols']) == 2
+        # Should have 3 columns (H, CNOT, final layer)
+        assert len(json_data['cols']) == 3
 
         # After these gates, final states should be |00⟩ and |11⟩ (Bell pair)
         # Check last column has the right structure
+        final_col = json_data['cols'][2]
+        assert '00' in final_col
+        assert '11' in final_col
+        assert final_col['00']['next'] == {}
+        assert final_col['11']['next'] == {}
 
     def test_three_gate_sequence(self):
         """Test H, CNOT, Z sequence."""
@@ -231,8 +261,8 @@ class TestComplexCircuits:
 
         json_data = graph.to_json()
 
-        # Should have 3 columns
-        assert len(json_data['cols']) == 3
+        # Should have 4 columns (3 gates + final layer)
+        assert len(json_data['cols']) == 4
 
     def test_interference_circuit_structure(self):
         """Test the interference circuit from the example."""
@@ -250,14 +280,213 @@ class TestComplexCircuits:
 
         json_data = graph.to_json()
 
-        # Should have 7 columns (7 gates)
-        assert len(json_data['cols']) == 7
+        # Should have 8 columns (7 gates + final layer)
+        assert len(json_data['cols']) == 8
 
         # Verify structure is maintained throughout
         for col in json_data['cols']:
             for state_key, state_data in col.items():
                 assert 'amp' in state_data
                 assert 'next' in state_data
+
+        # Final column should have empty 'next'
+        final_col = json_data['cols'][-1]
+        for state_data in final_col.values():
+            assert state_data['next'] == {}
+
+
+class TestCumulativeAmplitudes:
+    """Test that 'next' stores cumulative amplitudes (amp * transition_amplitude)."""
+
+    def test_next_stores_cumulative_amplitudes_with_custom_initial(self):
+        """Test that next stores cumulative amplitudes, not just transition amplitudes."""
+        from feynman_path.core.graph import FeynmanGraph
+        from feynman_path.core.gates import parse_gate_spec
+        import numpy as np
+
+        # Create graph and manually set initial state to have amplitude 0.5
+        graph = FeynmanGraph(n_qubits=2)
+        graph.current_state.clear()
+        graph.current_state.set('00', amplitude=0.5)
+
+        # Apply H on qubit 0
+        h0 = parse_gate_spec('h0', n_qubits=2)
+        graph.apply_gate(h0)
+
+        json_data = graph.to_json()
+        col0 = json_data['cols'][0]
+
+        # State '00' has amp=0.5
+        assert col0['00']['amp'] == 0.5
+
+        # next should contain cumulative: 0.5 * sqrt(2)/2 ≈ 0.3536
+        expected_cumulative = 0.5 * np.sqrt(2) / 2
+        assert abs(col0['00']['next']['00'] - expected_cumulative) < 1e-10
+        assert abs(col0['00']['next']['10'] - expected_cumulative) < 1e-10
+
+    def test_bell_pair_cumulative_amplitudes(self):
+        """Test Bell pair creation has cumulative amplitudes in next."""
+        from feynman_path.core.graph import FeynmanGraph
+        from feynman_path.core.gates import parse_gate_spec
+        import numpy as np
+
+        graph = FeynmanGraph(n_qubits=2)
+
+        # Apply H on qubit 0
+        h0 = parse_gate_spec('h0', n_qubits=2)
+        graph.apply_gate(h0)
+
+        # Apply CNOT(0,1)
+        cnot = parse_gate_spec('cnot0,1', n_qubits=2)
+        graph.apply_gate(cnot)
+
+        json_data = graph.to_json()
+
+        # Column 0 (after H): '00' has amp=1, next should be 1 * sqrt(2)/2
+        col0 = json_data['cols'][0]
+        s2_2 = np.sqrt(2) / 2
+        assert abs(col0['00']['next']['00'] - s2_2) < 1e-10
+        assert abs(col0['00']['next']['10'] - s2_2) < 1e-10
+
+        # Column 1 (after CNOT): transitions are identity (1), but cumulative should be sqrt(2)/2
+        col1 = json_data['cols'][1]
+        # State '00' has amp=sqrt(2)/2, CNOT doesn't change it, so next should be sqrt(2)/2 * 1
+        assert '00' in col1
+        assert abs(col1['00']['amp'] - s2_2) < 1e-10
+        assert abs(col1['00']['next']['00'] - s2_2) < 1e-10
+
+        # State '10' has amp=sqrt(2)/2, CNOT flips to '11', so next should be sqrt(2)/2 * 1
+        assert '10' in col1
+        assert abs(col1['10']['amp'] - s2_2) < 1e-10
+        assert abs(col1['10']['next']['11'] - s2_2) < 1e-10
+
+    def test_multi_gate_cumulative_amplitudes(self):
+        """Test cumulative amplitudes through multiple gates."""
+        from feynman_path.core.graph import FeynmanGraph
+        from feynman_path.core.gates import parse_gate_spec
+        import numpy as np
+
+        graph = FeynmanGraph(n_qubits=1)
+
+        # H gate creates superposition
+        h0 = parse_gate_spec('h0', n_qubits=1)
+        graph.apply_gate(h0)
+
+        # Another H gate should collapse back
+        graph.apply_gate(h0)
+
+        json_data = graph.to_json()
+        s2_2 = np.sqrt(2) / 2
+
+        # Column 1 (second H): both states '0' and '1' have amp=sqrt(2)/2
+        col1 = json_data['cols'][1]
+        # State '0' with amp=s2_2 transitions to '0' and '1', cumulative should be s2_2 * s2_2 = 0.5
+        assert abs(col1['0']['next']['0'] - 0.5) < 1e-10
+        assert abs(col1['0']['next']['1'] - 0.5) < 1e-10
+
+
+class TestFinalLayer:
+    """Test that JSON output includes final layer with empty 'next'."""
+
+    def test_json_includes_final_layer_single_gate(self):
+        """Test single gate circuit has final layer."""
+        from feynman_path.core.graph import FeynmanGraph
+        from feynman_path.core.gates import parse_gate_spec
+
+        graph = FeynmanGraph(n_qubits=1)
+        h0 = parse_gate_spec('h0', n_qubits=1)
+        graph.apply_gate(h0)
+
+        json_data = graph.to_json()
+
+        # Should have 2 columns: one for gate, one final layer
+        assert len(json_data['cols']) == 2
+
+        # Column 1 (final layer)
+        final_col = json_data['cols'][1]
+        assert '0' in final_col
+        assert '1' in final_col
+
+        # Both states should have empty next
+        assert final_col['0']['next'] == {}
+        assert final_col['1']['next'] == {}
+
+        # Final amplitudes should be sqrt(2)/2
+        import numpy as np
+        s2_2 = np.sqrt(2) / 2
+        assert abs(final_col['0']['amp'] - s2_2) < 1e-10
+        assert abs(final_col['1']['amp'] - s2_2) < 1e-10
+
+    def test_json_includes_final_layer_bell_pair(self):
+        """Test Bell pair circuit has final layer."""
+        from feynman_path.core.graph import FeynmanGraph
+        from feynman_path.core.gates import parse_gate_spec
+
+        graph = FeynmanGraph(n_qubits=2)
+        h0 = parse_gate_spec('h0', n_qubits=2)
+        cnot = parse_gate_spec('cnot0,1', n_qubits=2)
+
+        graph.apply_gate(h0)
+        graph.apply_gate(cnot)
+
+        json_data = graph.to_json()
+
+        # Should have 3 columns: H, CNOT, final
+        assert len(json_data['cols']) == 3
+
+        # Column 2 (final layer)
+        final_col = json_data['cols'][2]
+        assert '00' in final_col
+        assert '11' in final_col
+
+        # Both states should have empty next
+        assert final_col['00']['next'] == {}
+        assert final_col['11']['next'] == {}
+
+    def test_final_layer_matches_final_state(self):
+        """Test final layer amplitudes match get_final_state()."""
+        from feynman_path.core.graph import FeynmanGraph
+        from feynman_path.core.gates import parse_gate_spec
+
+        graph = FeynmanGraph(n_qubits=2)
+        gates = ['h0', 'cnot0,1', 'z1']
+
+        for gate_str in gates:
+            gate = parse_gate_spec(gate_str, n_qubits=2)
+            graph.apply_gate(gate)
+
+        json_data = graph.to_json()
+        final_state = graph.get_final_state()
+
+        # Last column should be the final layer
+        final_col = json_data['cols'][-1]
+
+        # States in final column should match final_state
+        assert set(final_col.keys()) == set(final_state.keys())
+
+        # Amplitudes should match
+        for state in final_col:
+            assert final_col[state]['amp'] == final_state[state]
+            assert final_col[state]['next'] == {}
+
+    def test_json_empty_circuit_has_initial_layer(self):
+        """Test empty circuit (no gates) has one layer with initial state."""
+        from feynman_path.core.graph import FeynmanGraph
+
+        graph = FeynmanGraph(n_qubits=2)
+        # Don't apply any gates
+
+        json_data = graph.to_json()
+
+        # Should have 1 column (just the initial/final state)
+        assert len(json_data['cols']) == 1
+
+        # Column 0 should have only '00' with amp=1 and empty next
+        col0 = json_data['cols'][0]
+        assert len(col0) == 1
+        assert '00' in col0
+        assert col0['00']['amp'] == 1
+        assert col0['00']['next'] == {}
 
 
 class TestJSONSerialization:
@@ -321,8 +550,8 @@ class TestLargeCircuits:
 
         json_data = graph.to_json()
 
-        # Should have 15 columns (15 gates)
-        assert len(json_data['cols']) == 15
+        # Should have 16 columns (15 gates + final layer)
+        assert len(json_data['cols']) == 16
 
         # Verify structure is maintained
         for col in json_data['cols']:
@@ -337,6 +566,7 @@ class TestLargeCircuits:
         col0 = json_data['cols'][0]
         assert '00000' in col0
         assert abs(col0['00000']['amp'] - 1.0) < 1e-10
+        # Cumulative amplitudes: 1.0 * sqrt(2)/2
         assert abs(col0['00000']['next']['00000'] - s2/2) < 1e-10
         assert abs(col0['00000']['next']['10000'] - s2/2) < 1e-10
 
@@ -354,3 +584,8 @@ class TestLargeCircuits:
         assert len(final_state) == 1
         assert '01000' in final_state
         assert abs(final_state['01000'] - 1.0) < 1e-8
+
+        # Final column should have empty next
+        final_col = json_data['cols'][-1]
+        assert '01000' in final_col
+        assert final_col['01000']['next'] == {}

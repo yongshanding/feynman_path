@@ -122,8 +122,8 @@ The output is a JSON object with the following structure:
       "state": {
         "amp": <amplitude>,
         "next": {
-          "next_state_1": <transition_amplitude_1>,
-          "next_state_2": <transition_amplitude_2>
+          "next_state_1": <amplitude * transition_amplitude_1>,
+          "next_state_2": <amplitude * transition_amplitude_2>
         }
       }
     }
@@ -132,8 +132,8 @@ The output is a JSON object with the following structure:
 ```
 
 Each column represents a timestep (gate application), showing:
-- Current states and their amplitudes
-- Transitions to next states with transition amplitudes
+- "amp": Current states and their amplitudes
+- "next": Cummulative amplitude transitions to next states: current amplitude * transition amplitudes
 
 ## Python Package
 

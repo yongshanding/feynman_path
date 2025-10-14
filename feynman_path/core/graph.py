@@ -72,17 +72,20 @@ class FeynmanGraph:
             # Get all possible transitions from this state
             transitions = gate.apply_to_state(state_str)
 
-            # Store transitions for JSON
-            json_col[state_str] = {
-                'amp': amplitude,
-                'next': transitions
-            }
-
-            # Update next state amplitudes
+            # Compute cumulative amplitudes for next states
+            cumulative_next = {}
             for next_state_str, transition_amp in transitions.items():
                 # Multiply current amplitude by transition amplitude
-                new_amp = amplitude * transition_amp
-                next_state.add(next_state_str, new_amp)
+                cumulative_amp = amplitude * transition_amp
+                cumulative_next[next_state_str] = cumulative_amp
+                # Update next state amplitudes
+                next_state.add(next_state_str, cumulative_amp)
+
+            # Store cumulative amplitudes for JSON
+            json_col[state_str] = {
+                'amp': amplitude,
+                'next': cumulative_next
+            }
 
         # Store this timestep's data
         self._timestep_data.append(json_col)
@@ -108,9 +111,21 @@ class FeynmanGraph:
                 ]
             }
         """
+        # Build columns list starting with existing gate columns
+        cols = list(self._timestep_data)
+
+        # Add final layer with current state amplitudes and empty next
+        final_col = {}
+        for state_str, amplitude in self.current_state.items():
+            final_col[state_str] = {
+                'amp': amplitude,
+                'next': {}
+            }
+        cols.append(final_col)
+
         return {
             'type': 'feynmanpath',
-            'cols': self._timestep_data
+            'cols': cols
         }
 
     def get_final_state(self) -> Dict[str, Union[complex, float, sympy.Basic]]:

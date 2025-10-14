@@ -38,13 +38,14 @@ class TestComplexAmplitudeCircuits:
         json_data = graph.to_json()
         s2 = np.sqrt(2)
 
-        # Should have 7 columns
-        assert len(json_data['cols']) == 7
+        # Should have 8 columns (7 gates + final layer)
+        assert len(json_data['cols']) == 8
 
         # Column 0: H on q0
         col0 = json_data['cols'][0]
         assert '00' in col0
         assert abs(col0['00']['amp'] - 1.0) < 1e-10
+        # Cumulative amplitudes: 1.0 * sqrt(2)/2
         assert abs(col0['00']['next']['00'] - s2/2) < 1e-10
         assert abs(col0['00']['next']['10'] - s2/2) < 1e-10
 
@@ -61,11 +62,12 @@ class TestComplexAmplitudeCircuits:
         assert '11' in col2
         # State 00 (q1=0) unchanged
         assert abs(col2['00']['amp'] - s2/2) < 1e-10
-        assert abs(col2['00']['next']['00'] - 1.0) < 1e-10
+        # Cumulative: sqrt(2)/2 * 1 = sqrt(2)/2
+        assert abs(col2['00']['next']['00'] - s2/2) < 1e-10
         # State 11 (q1=1) gets phase i
         assert abs(col2['11']['amp'] - s2/2) < 1e-10
-        # S|1⟩ = i|1⟩, so amplitude becomes i*sqrt(2)/2
-        assert abs(col2['11']['next']['11'] - 1j) < 1e-10
+        # Cumulative: sqrt(2)/2 * i = i*sqrt(2)/2
+        assert abs(col2['11']['next']['11'] - s2/2*1j) < 1e-10
 
         # Column 3: H on q0 - complex amplitudes propagate
         col3 = json_data['cols'][3]
