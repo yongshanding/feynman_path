@@ -2,7 +2,7 @@
 
 import argparse
 import sys
-from .core import FeynmanGraph, parse_gate_spec, to_json_string, to_json_file
+from .core import FeynmanGraph, parse_gate_spec, to_json_string, to_json_file, parse_gate_layers
 
 
 def main():
@@ -34,6 +34,15 @@ Available gates:
   - Basic: H, X, Y, Z, S, Sdag, T, Tdag
   - Rotations: Rx, Ry, Rz (angles: numeric, pi, or expressions like pi/4)
   - Controlled: CNOT, CONOT, Toffoli, M[k]CNOT (k=1 to 15)
+
+Layer-based mode:
+  Use '-' to separate gates into layers. Each layer produces one column in the output
+  instead of one column per gate. Gates within a layer are applied sequentially.
+
+  Example: feynman_path 4 h0 h1 h2 h3 - cnot0,1 cnot2,3 - cnot1,2
+           This creates 4 columns: initial + 3 layers
+
+  Without '-', each gate creates its own column (original behavior).
         """
     )
 
@@ -46,7 +55,7 @@ Available gates:
     parser.add_argument(
         'gates',
         nargs='+',
-        help='List of gates to apply (e.g., h0 cnot0,1 z1)'
+        help='List of gates to apply (e.g., h0 cnot0,1 z1). Use - to separate layers'
     )
 
     parser.add_argument(
@@ -79,13 +88,27 @@ Available gates:
             initial_state=args.initial_state
         )
 
-        # Apply gates in sequence
-        for gate_str in args.gates:
+        # Parse gate layers (handles both layer mode and regular mode)
+        try:
+            layers = parse_gate_layers(args.gates)
+        except ValueError as e:
+            print(f"Error parsing gate layers: {e}", file=sys.stderr)
+            sys.exit(1)
+
+        # Apply each layer
+        for layer_gates in layers:
             try:
-                gate = parse_gate_spec(gate_str, n_qubits=args.n_qubits)
-                graph.apply_gate(gate)
+                # Parse gate specifications
+                gates = [parse_gate_spec(g, n_qubits=args.n_qubits) for g in layer_gates]
+
+                # Apply as layer if multiple gates, otherwise use apply_gate
+                if len(gates) == 1:
+                    graph.apply_gate(gates[0])
+                else:
+                    graph.apply_layer(gates)
+
             except (ValueError, KeyError) as e:
-                print(f"Error parsing gate '{gate_str}': {e}", file=sys.stderr)
+                print(f"Error processing gates {layer_gates}: {e}", file=sys.stderr)
                 sys.exit(1)
 
         # Get JSON output

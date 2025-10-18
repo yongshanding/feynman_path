@@ -128,6 +128,84 @@ class FeynmanGraph:
             'cols': cols
         }
 
+    def apply_layer(self, gates: List[Gate]) -> None:
+        """
+        Apply multiple gates as a single layer.
+
+        All gates in the layer are applied sequentially to the quantum state,
+        but only one timestep column is recorded in the JSON output. This
+        allows for layer-based visualization where each column represents
+        a group of gates instead of individual gates.
+
+        Args:
+            gates: List of Gate objects to apply as a layer
+
+        Raises:
+            ValueError: If gates list is empty
+        """
+        if not gates:
+            raise ValueError(
+                "Cannot apply empty layer. "
+                "Each layer must contain at least one gate."
+            )
+
+        # Store initial state for JSON column
+        initial_states = {}
+        for state_str, amplitude in self.current_state.items():
+            initial_states[state_str] = amplitude
+
+        # Apply all gates sequentially
+        for gate in gates:
+            if gate.n_qubits != self.n_qubits:
+                raise ValueError(
+                    f"Gate is for {gate.n_qubits} qubits but graph has {self.n_qubits}"
+                )
+
+            next_state = SparseStateVector(self.n_qubits)
+
+            # Apply gate to current state
+            for state_str, amplitude in self.current_state.items():
+                transitions = gate.apply_to_state(state_str)
+                for next_state_str, transition_amp in transitions.items():
+                    cumulative_amp = amplitude * transition_amp
+                    next_state.add(next_state_str, cumulative_amp)
+
+            # Update current state for next gate in layer
+            self.current_state = next_state
+
+        # Now record the cumulative transition for JSON output
+        json_col = {}
+        for initial_state_str, initial_amplitude in initial_states.items():
+            # Compute cumulative transitions from initial state to final states
+            cumulative_next = {}
+
+            # We need to track which final states came from this initial state
+            # Apply all gates to this specific initial state
+            temp_state = SparseStateVector(self.n_qubits)
+            temp_state.set(initial_state_str, amplitude=1)
+
+            for gate in gates:
+                next_temp_state = SparseStateVector(self.n_qubits)
+                for state_str, amplitude in temp_state.items():
+                    transitions = gate.apply_to_state(state_str)
+                    for next_state_str, transition_amp in transitions.items():
+                        cumulative_amp = amplitude * transition_amp
+                        next_temp_state.add(next_state_str, cumulative_amp)
+                temp_state = next_temp_state
+
+            # Now multiply by initial amplitude
+            for final_state_str, transition_amp in temp_state.items():
+                cumulative_next[final_state_str] = initial_amplitude * transition_amp
+
+            json_col[initial_state_str] = {
+                'amp': initial_amplitude,
+                'next': cumulative_next
+            }
+
+        # Store this timestep's data
+        self._timestep_data.append(json_col)
+        self.n_timesteps += 1
+
     def get_final_state(self) -> Dict[str, Union[complex, float, sympy.Basic]]:
         """
         Get the final quantum state after all gates.

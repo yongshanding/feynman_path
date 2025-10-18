@@ -503,15 +503,17 @@ class TestJSONSerialization:
 
         json_data = graph.to_json()
 
-        # Convert to JSON string and back to verify serializability
+        # Convert to JSON-like string with unquoted structural keys
         from feynman_path.core.serialization import to_json_string
 
         json_str = to_json_string(json_data)
         assert isinstance(json_str, str)
 
-        # Should be valid JSON
-        parsed = json.loads(json_str)
-        assert parsed['type'] == 'feynmanpath'
+        # Should contain unquoted structural keys
+        assert 'type: "feynmanpath"' in json_str
+        assert 'cols:' in json_str
+        assert 'amp:' in json_str
+        assert 'next:' in json_str
 
     def test_complex_amplitudes_serialization(self):
         """Test serialization of complex amplitudes."""

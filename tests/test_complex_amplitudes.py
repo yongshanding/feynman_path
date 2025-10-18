@@ -124,8 +124,8 @@ class TestComplexAmplitudeCircuits:
         json_data = graph.to_json()
         json_str = to_json_string(json_data)
 
-        # Should contain complex number representation
-        assert '1j' in json_str or 'I' in json_str  # Python or sympy notation
+        # Should contain complex number representation as { re: x, im: y }
+        assert 're:' in json_str and 'im:' in json_str
         assert isinstance(json_str, str)
 
     def test_final_probabilities_with_complex_amplitudes(self):
