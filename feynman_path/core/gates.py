@@ -102,6 +102,87 @@ def generate_rz_matrix(theta: float) -> npt.NDArray[np.complex128]:
     ], dtype=np.complex128)
 
 
+def generate_crx_matrix(theta: float) -> npt.NDArray[np.complex128]:
+    """
+    Generate controlled-Rx(θ) rotation matrix.
+
+    CRx(θ) = |0⟩⟨0| ⊗ I + |1⟩⟨1| ⊗ Rx(θ)
+
+    When control qubit is 0, identity is applied to target.
+    When control qubit is 1, Rx(θ) is applied to target.
+
+    Args:
+        theta: Rotation angle in radians
+
+    Returns:
+        4x4 controlled rotation matrix
+    """
+    I = np.eye(2, dtype=np.complex128)
+    Rx = generate_rx_matrix(theta)
+
+    # Block diagonal matrix: [I, 0; 0, Rx]
+    CRx = np.block([
+        [I, np.zeros((2, 2), dtype=np.complex128)],
+        [np.zeros((2, 2), dtype=np.complex128), Rx]
+    ])
+
+    return CRx
+
+
+def generate_cry_matrix(theta: float) -> npt.NDArray[np.complex128]:
+    """
+    Generate controlled-Ry(θ) rotation matrix.
+
+    CRy(θ) = |0⟩⟨0| ⊗ I + |1⟩⟨1| ⊗ Ry(θ)
+
+    When control qubit is 0, identity is applied to target.
+    When control qubit is 1, Ry(θ) is applied to target.
+
+    Args:
+        theta: Rotation angle in radians
+
+    Returns:
+        4x4 controlled rotation matrix
+    """
+    I = np.eye(2, dtype=np.complex128)
+    Ry = generate_ry_matrix(theta)
+
+    # Block diagonal matrix: [I, 0; 0, Ry]
+    CRy = np.block([
+        [I, np.zeros((2, 2), dtype=np.complex128)],
+        [np.zeros((2, 2), dtype=np.complex128), Ry]
+    ])
+
+    return CRy
+
+
+def generate_crz_matrix(theta: float) -> npt.NDArray[np.complex128]:
+    """
+    Generate controlled-Rz(θ) rotation matrix.
+
+    CRz(θ) = |0⟩⟨0| ⊗ I + |1⟩⟨1| ⊗ Rz(θ)
+
+    When control qubit is 0, identity is applied to target.
+    When control qubit is 1, Rz(θ) is applied to target.
+
+    Args:
+        theta: Rotation angle in radians
+
+    Returns:
+        4x4 controlled rotation matrix
+    """
+    I = np.eye(2, dtype=np.complex128)
+    Rz = generate_rz_matrix(theta)
+
+    # Block diagonal matrix: [I, 0; 0, Rz]
+    CRz = np.block([
+        [I, np.zeros((2, 2), dtype=np.complex128)],
+        [np.zeros((2, 2), dtype=np.complex128), Rz]
+    ])
+
+    return CRz
+
+
 def parse_angle(angle_str: str) -> float:
     """
     Parse angle string to float value.
@@ -559,6 +640,55 @@ def parse_gate_spec(gate_spec: str, n_qubits: int) -> Gate:
 
     gate_name = name_part.lower()
     params_part = gate_spec[len(name_part):]
+
+    # Check if it's a controlled parametrized rotation gate
+    if gate_name in ['crx', 'cry', 'crz']:
+        # Parse: control,target,angle (e.g., '0,1,pi/4')
+        params = params_part.split(',', 2)  # Split into at most 3 parts
+        if len(params) != 3:
+            raise ValueError(
+                f"Controlled rotation gate '{gate_name}' requires format: {gate_name}control,target,angle"
+            )
+
+        control = int(params[0])
+        target = int(params[1])
+        angle = parse_angle(params[2])
+
+        # Validate control and target are different
+        if control == target:
+            raise ValueError(
+                f"Controlled rotation gate '{gate_name}' cannot have same control and target qubit. "
+                f"Got: control={control}, target={target}"
+            )
+
+        # Validate qubit indices
+        if control < 0 or control >= n_qubits:
+            raise ValueError(
+                f"Qubit index {control} out of range [0, {n_qubits-1}]"
+            )
+        if target < 0 or target >= n_qubits:
+            raise ValueError(
+                f"Qubit index {target} out of range [0, {n_qubits-1}]"
+            )
+
+        # Generate the appropriate controlled rotation matrix
+        if gate_name == 'crx':
+            matrix = generate_crx_matrix(angle)
+            name = 'CRx'
+        elif gate_name == 'cry':
+            matrix = generate_cry_matrix(angle)
+            name = 'CRy'
+        else:  # crz
+            matrix = generate_crz_matrix(angle)
+            name = 'CRz'
+
+        return Gate(
+            name=name,
+            matrix=matrix,
+            qubits=(control, target),
+            n_qubits=n_qubits,
+            angle=angle
+        )
 
     # Check if it's a parametrized rotation gate
     if gate_name in ['rx', 'ry', 'rz']:

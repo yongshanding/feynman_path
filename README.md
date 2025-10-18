@@ -78,6 +78,12 @@ feynman_path 3 h0 cnot0,1 cnot1,2 h2
 - `rz`: Z-axis rotation gate, Rz(θ) = cos(θ/2)I - i·sin(θ/2)Z
 - Angles can be: numeric (`1.5708`), symbolic (`pi`), or expressions (`pi/4`, `2*pi/3`)
 
+**Controlled rotation gates:** `crx0,1,pi/4`, `cry1,2,1.5708`, `crz0,1,pi/2` (gate + control,target,angle)
+- `crx`: Controlled X-rotation (if control=1, apply Rx to target)
+- `cry`: Controlled Y-rotation (if control=1, apply Ry to target)
+- `crz`: Controlled Z-rotation (if control=1, apply Rz to target)
+- Angles can be: numeric (`1.5708`), symbolic (`pi`), or expressions (`pi/4`, `2*pi/3`)
+
 **Two-qubit gates:** `cnot0,1`, `conot1,2` (gate name + control,target)
 - `cnot`: Controlled-NOT gate (flip target if control=1)
 - `conot`: 0-controlled NOT gate (flip target if control=0)
@@ -90,6 +96,35 @@ feynman_path 3 h0 cnot0,1 cnot1,2 h2
   - `m3cnot0,1,2,3`: 3 controls on qubits 0,1,2, target on qubit 3
   - Supports non-consecutive qubits: `m3cnot0,3,4,1`
 
+### Layer-Based Mode
+
+Use the `-` separator to group gates into layers. Each layer produces one column in the output instead of one column per gate:
+
+```bash
+# Layer-based: 5 columns (initial + 4 layers)
+feynman_path 4 h0 h1 h2 h3 - cnot0,1 cnot2,3 - cnot1,2 - h0 h1 h2 h3
+
+# Without layers: 13 columns (initial + 12 gates)
+feynman_path 4 h0 h1 h2 h3 cnot0,1 cnot2,3 cnot1,2 h0 h1 h2 h3
+```
+
+**Benefits of Layer Mode:**
+- **Cleaner visualization**: Group related gates into logical layers
+- **Reduced output size**: Fewer columns for complex circuits
+- **Circuit structure**: Matches common circuit diagrams with distinct layers
+- **Equivalent results**: Final quantum state is identical to gate-by-gate mode
+
+**Example use cases:**
+```bash
+# Parameterized quantum circuit with distinct layers
+feynman_path 3 h0 h1 h2 - rx0,pi/4 ry1,pi/2 rz2,pi/3 - cnot0,1 cnot1,2
+
+# Quantum algorithm with preparation, oracle, and measurement layers
+feynman_path 4 h0 h1 h2 h3 - m3cnot0,1,2,3 - h0 h1 h2 h3
+```
+
+The layer at timestep `n` in layer mode is equivalent to the state at the corresponding timestep in gate-by-gate mode.
+
 ### Command Line Options
 ```
 $ feynman_path -h
@@ -101,6 +136,7 @@ Generate Feynman path representation for quantum circuits (JSON output only).
 positional arguments:
   n_qubits              Number of qubits in the quantum circuit
   gates                 List of gates to apply (e.g., h0 cnot0,1 z1)
+                        Use - to separate gates into layers
 
 optional arguments:
   -h, --help            show this help message and exit
@@ -237,6 +273,24 @@ feynman_path 2 rx0,pi/4 cnot0,1
 
 # Multiple rotations with different angles
 feynman_path 3 ry0,pi/2 rx1,1.5708 rz2,2*pi/3
+```
+
+### Controlled Rotation Gates
+
+Apply controlled rotation gates (CRx, CRy, CRz):
+
+```bash
+# CRz rotation: control=0, target=1, angle=π/4
+feynman_path 2 crz0,1,pi/4
+
+# CRy rotation with numeric angle
+feynman_path 3 cry1,2,1.5708
+
+# Create entanglement with controlled rotations
+feynman_path 2 h0 crx0,1,pi/2
+
+# Mix controlled rotations with other gates
+feynman_path 3 h0 crx0,1,pi/4 cry1,2,pi/2 cnot0,2
 ```
 
 ### Multi-Controlled Gates
